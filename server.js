@@ -14,55 +14,92 @@ app.use(express.json());
 
 // Health check
 app.get('/', (req, res) => {
-    res.json({ 
-        status: 'ok',
-        message: 'Kittens Payment Server is running! 🐱' 
-    });
+  res.json({
+    status: 'ok',
+    message: 'Pawly Payment Server is running! 🐾'
+  });
 });
 
-// Crear sesión de Stripe Checkout
-app.post('/create-checkout-session', async (req, res) => {
-    try {
-        const { amount, description } = req.body;
+// Crear PaymentIntent para cobrar un producto
+// El frontend envía: { productId, productName, amount, currency }
+// amount debe venir en centavos (ej: $10 MXN = 1000)
+app.post('/create-payment-intent', async (req, res) => {
+  try {
+    const { productId, productName, amount, currency = 'mxn' } = req.body;
 
-        if (!amount || amount < 50) {
-            return res.status(400).json({ 
-                error: 'Monto mínimo: $0.50 USD' 
-            });
-        }
-
-        // URL base del frontend (cambiará según el entorno)
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
-
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            line_items: [
-                {
-                    price_data: {
-                        currency: 'usd',
-                        product_data: {
-                            name: description,
-                            description: 'Premium cat content subscription',
-                        },
-                        unit_amount: amount,
-                    },
-                    quantity: 1,
-                },
-            ],
-            mode: 'payment',
-            success_url: `${frontendUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${frontendUrl}/premium.html`,
-        });
-
-        res.json({ sessionId: session.id });
-
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: error.message });
+    // Monto mínimo de Stripe: 10 MXN = 1000 centavos
+    if (!amount || amount < 1000) {
+      return res.status(400).json({
+        error: 'Monto mínimo: $10.00 MXN'
+      });
     }
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,                  // en centavos
+      currency,
+      metadata: {
+        productId: String(productId),
+        productName,
+        store: 'Pawly'
+      },
+      description: `Pawly – ${productName}`,
+    });
+
+    res.json({ clientSecret: paymentIntent.client_secret });
+
+  } catch (error) {
+    console.error('Error creando PaymentIntent:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// (Opcional) Crear sesión Checkout de Stripe
+// Útil si prefieres redirigir al usuario a la página de pago de Stripe
+app.post('/create-checkout-session', async (req, res) => {
+  try {
+    const { productId, productName, amount, currency = 'mxn' } = req.body;
+
+    if (!amount || amount < 1000) {
+      return res.status(400).json({
+        error: 'Monto mínimo: $10.00 MXN'
+      });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency,
+            product_data: {
+              name: productName,
+              description: 'Pawly Pet Shop',
+            },
+            unit_amount: amount,
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${frontendUrl}/index.html?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url:  `${frontendUrl}/index.html?payment=cancelled`,
+      metadata: {
+        productId: String(productId),
+        store: 'Pawly'
+      },
+    });
+
+    res.json({ sessionId: session.id, url: session.url });
+
+  } catch (error) {
+    console.error('Error creando Checkout Session:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 const PORT = process.env.PORT || 4242;
 app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🐾 Pawly server running on port ${PORT}`);
 });
