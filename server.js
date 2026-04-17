@@ -35,7 +35,7 @@ app.post('/create-payment-intent', async (req, res) => {
     }
 
     const paymentIntent = await stripe.paymentIntents.create({
-      amount,                  // en centavos
+      amount,
       currency,
       metadata: {
         productId: String(productId),
@@ -54,7 +54,6 @@ app.post('/create-payment-intent', async (req, res) => {
 });
 
 // (Opcional) Crear sesión Checkout de Stripe
-// Útil si prefieres redirigir al usuario a la página de pago de Stripe
 app.post('/create-checkout-session', async (req, res) => {
   try {
     const { productId, productName, amount, currency = 'mxn' } = req.body;
